@@ -1,7 +1,11 @@
 /*
 Kevin Terretaz
 kevinterretaz@gmail.com
-251025
+251029
+removed "reset all button" triggering composite display mode
+made check_Active_Image() return a boolean to prevent timer error
+made apply LUT palette triggering composite mode when in grayscale 
+add possibility to swap LUTs order in palettes directly from the popup button 
 
 I heavilly used OpenAI GPT thanks to the github playground access
 So I guess I have to thank the entire world of programmers that published their code since the begining of java
@@ -76,7 +80,7 @@ public class Channels_and_Contrast implements PlugIn {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 try {
-                	create_Frame();
+                    create_Frame();
                 }
                 catch (Throwable t) {
                     IJ.handleException(t);
@@ -102,8 +106,9 @@ public class Channels_and_Contrast implements PlugIn {
                     else return;
                 }
                 try {
-                    check_Active_Image();
-                    if (!updating && something_Changed()) update_UI();
+                    if (check_Active_Image()){
+                        if (!updating && something_Changed()) update_UI();
+                    }
                 } catch (Throwable t) {
                     IJ.handleException(t);
                     error_State = true;
@@ -137,13 +142,13 @@ public class Channels_and_Contrast implements PlugIn {
     
     // check if a new image as been selected, if it's compatible with the plugin
     // if not, put the frame in idle state.
-    void check_Active_Image() {
+    Boolean check_Active_Image() {
         ImagePlus imp = WindowManager.getCurrentImage();
         // do nothing when a plugin is already working on image
         if (imp != null) {
             if (imp.isLocked() || imp.isLockedByAnotherThread()){
-            	updating = true;
-            	return;
+                updating = true;
+                return false;
             }
         }
         else updating = false;
@@ -153,7 +158,7 @@ public class Channels_and_Contrast implements PlugIn {
         is_weird_Stack = imp == null ? false : (imp.getNChannels()>1 && !imp.isComposite());
 
         if (no_Image || is_RGB || is_weird_Stack) {
-            if (plugin_Locked) return;
+            if (plugin_Locked) return false;
             current_Imp = imp;
             main_Panel.removeAll();
             updating = false;
@@ -167,17 +172,19 @@ public class Channels_and_Contrast implements PlugIn {
             main_Panel.repaint();
             plugin_Locked = true;
             last_luts = null;
-            return;
+            return false;
         }
         if (imp != null && imp != current_Imp) {
             long now = System.currentTimeMillis();
-            if (now - last_Update < refresh_Interval) return; // in case a script is switching rapidly through opened images
+            if (now - last_Update < refresh_Interval) return false; // in case a script is switching rapidly through opened images
             last_Update = now;
             current_Imp = imp;
             plugin_Locked = false;
             frame.setResizable(true);
             setup_Current_Image();
         }
+            return true;
+
     }
 
     void setup_Current_Image() {
@@ -475,7 +482,7 @@ public class Channels_and_Contrast implements PlugIn {
                 new Thread(new Runnable() {
                     public void run() {
                        updating = true;
-                       ((CompositeImage)current_Imp).setDisplayMode(IJ.COMPOSITE);
+                       // ((CompositeImage)current_Imp).setDisplayMode(IJ.COMPOSITE);
                        IJ.run("Reset Display", "channel=0");
                        updating = false;
                     }
@@ -505,7 +512,7 @@ public class Channels_and_Contrast implements PlugIn {
         return all_Button_Panel;
     }
 
-    public JButton get_Palettes_Button(){ 
+    public JButton get_Palettes_Button() { 
         JButton show_LUT_Sets_Button = new JButton(make_4_Mini_LUTs_Icon(40, 16));
         show_LUT_Sets_Button.setMargin(new Insets(2, 2, 2, 2));
         show_LUT_Sets_Button.setToolTipText("LUT Palettes");
@@ -517,34 +524,73 @@ public class Channels_and_Contrast implements PlugIn {
                 if (sets == null || sets.length == 0) no_Sets = true;
                 JPopupMenu popup = new JPopupMenu();
                 JPanel palettes_Panel = new JPanel();
-                if (!no_Sets){
+                if (!no_Sets) {
                     palettes_Panel.setLayout(new BoxLayout(palettes_Panel, BoxLayout.Y_AXIS));
-
                     for (int i = 0; i < sets.length; i++) {
                         JPanel icons_Row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 3));
                         icons_Row.setBackground(Color.darkGray);
                         icons_Row.setToolTipText((String)sets[i][0]);
                         java.util.List<String> lut_Names = new java.util.ArrayList<String>();
-
+                        final java.util.List<JLabel> icons_List = new java.util.ArrayList<JLabel>();
                         for (int c = 1; c <= LUT_COUNT; c++) {
                             Object icon_Obj = sets[i][c];
                             String lut_Name = (icon_Obj instanceof ImageIcon) ? get_LUT_Name_At(icon_Obj) : "Grays";
                             lut_Names.add(lut_Name);
                             ImageIcon icon = (icon_Obj instanceof ImageIcon) ? (ImageIcon)icon_Obj : null;
-                            if (icon != null) icons_Row.add(new JLabel(icon));
+                            if (icon != null) {
+                                JLabel label = new JLabel(icon);
+                                icons_List.add(label);
+                                icons_Row.add(label);
+                            }
                         }
-                        final String[] lut_Names_Array = lut_Names.toArray(new String[0]);
+                        // MouseListener handles both drag-to-swap and apply on click
+                        final int row_Index = i;
+                        icons_Row.setTransferHandler(null); // disable any internal Swing drag support
                         icons_Row.addMouseListener(new MouseAdapter() {
+                            int pressed_Index = -1;
                             @Override
-                            public void mouseClicked(MouseEvent evt) {
-                                ImagePlus imp = WindowManager.getCurrentImage();
-                                if (imp == null) return;
-                                int nChannels = imp.getNChannels();
-                                for (int ch = 0; ch < nChannels; ch++) {
-                                    String lut_Name = (ch < lut_Names_Array.length) ? lut_Names_Array[ch] : "Grays";
-                                    apply_LUT(imp, lut_Name, ch + 1);
+                            public void mousePressed(MouseEvent event) {
+                                for (int k = 0; k < icons_List.size(); k++) {
+                                    if (icons_List.get(k).getBounds().contains(event.getPoint())) {
+                                        pressed_Index = k;
+                                        break;
+                                    }
                                 }
-                                imp.updateAndDraw();
+                            }
+                            @Override
+                            public void mouseReleased(MouseEvent event) {
+                                if (pressed_Index == -1) return;
+                                for (int k = 0; k < icons_List.size(); k++) {
+                                    if (icons_List.get(k).getBounds().contains(event.getPoint())) {
+                                        if (SwingUtilities.isLeftMouseButton(event) && pressed_Index == k) {
+                                            // Click: apply LUTs, using the CURRENT lut_Names!
+                                            ImagePlus imp = WindowManager.getCurrentImage();
+                                            if (imp == null) return;
+                                            int nChannels = imp.getNChannels();
+                                            for (int ch = 0; ch < nChannels; ch++) {
+                                                String lut_Name = (ch < lut_Names.size()) ? lut_Names.get(ch) : "Grays";
+                                                apply_LUT(imp, lut_Name, ch + 1);
+                                            }
+                                            ((CompositeImage)current_Imp).setDisplayMode(IJ.COMPOSITE);
+                                            imp.updateAndDraw();
+                                        } else if (pressed_Index != k) {
+                                            // Drag & swap
+                                            Icon temp_Icon = icons_List.get(pressed_Index).getIcon();
+                                            icons_List.get(pressed_Index).setIcon(icons_List.get(k).getIcon());
+                                            icons_List.get(k).setIcon(temp_Icon);
+                                            String temp_Name = lut_Names.get(pressed_Index);
+                                            lut_Names.set(pressed_Index, lut_Names.get(k));
+                                            lut_Names.set(k, temp_Name);
+                                            Object temp_Obj = sets[row_Index][pressed_Index + 1];
+                                            sets[row_Index][pressed_Index + 1] = sets[row_Index][k + 1];
+                                            sets[row_Index][k + 1] = temp_Obj;
+                                            icons_Row.repaint();
+                                            export_Lut_Sets_From_Sets_Array(sets, IJ.getDirectory("luts")+"/LUT_Palette_Manager.csv");
+                                        }
+                                        break;
+                                    }
+                                }
+                                pressed_Index = -1;
                             }
                             @Override
                             public void mouseEntered(MouseEvent evt) {
@@ -811,6 +857,29 @@ public class Channels_and_Contrast implements PlugIn {
         return list.toArray(new String[0]);
     }
 
+    public void export_Lut_Sets_From_Sets_Array(Object[][] sets, String save_Loc) {
+        try {
+            FileWriter fw = new FileWriter(save_Loc);
+            fw.write("SetName");
+            for (int i = 1; i <= LUT_COUNT; i++) fw.write(",LUT" + i);
+            fw.write("\n");
+            for (int row = 0; row < sets.length; row++) {
+                // Set name (column zero)
+                fw.write("\"" + sets[row][0].toString().replace("\"", "\"\"") + "\"");
+                // LUTs: columns 1...LUT_COUNT
+                for (int col = 1; col <= LUT_COUNT; col++) {
+                    String lut_Name = get_LUT_Name_At(sets[row][col]);
+                    if (lut_Name == null) fw.write(",");
+                    else fw.write(",\"" + lut_Name.replace("\"", "\"\"") + "\"");
+                }
+                fw.write("\n");
+            }
+            fw.close();
+        } catch (Exception ex) {
+            IJ.error("Export LUT sets failed:\n" + ex);
+        }
+    }
+    
     public void apply_LUT(ImagePlus imp, String lut_Name, int channel) {
         LUT[] luts = imp.getLuts();
         double min = luts[channel-1].min;

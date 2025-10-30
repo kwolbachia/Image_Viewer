@@ -215,13 +215,13 @@ public class LUTs_Manager implements PlugIn {
         search_Panel.add(search_Bar);
         for (String color : color_Names) {
             JToggleButton btn = new JToggleButton() {
-		        @Override
-		        protected void paintComponent(Graphics g) {
-		            g.setColor(getBackground());
-		            g.fillRect(0, 0, getWidth(), getHeight());
-		            super.paintComponent(g);
-		        }
-		    };
+                @Override
+                protected void paintComponent(Graphics g) {
+                    g.setColor(getBackground());
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                    super.paintComponent(g);
+                }
+            };
             btn.setPreferredSize(new Dimension(18, 18));
             btn.setBackground(get_Color(color));
             btn.setToolTipText(color.substring(0, 1).toUpperCase() + color.substring(1));
@@ -351,7 +351,8 @@ public class LUTs_Manager implements PlugIn {
             int gray_Value = x;
             int shifted_Value = (gray_Value + 20);
             for (int y = 15; y < 23; y++) {
-                ip.putPixel(x, y, (x % 3 == 0 || x % 3 == 3) ? gray_Value : shifted_Value); // Stripes
+                int value = (x % 3 == 0 || x % 3 == 3) ? gray_Value : shifted_Value;
+                ip.putPixel(x, y, value); // Stripes
             }
         }
         return new ImageIcon(ip.getBufferedImage());
@@ -728,17 +729,17 @@ public class LUTs_Manager implements PlugIn {
         apply_Btn.setMargin(new Insets(2, 2, 2, 2));
         apply_Btn.addActionListener(e -> apply_Selected_LUT_Set(sets_Table, model));
         
-		JButton apply_To_All_Btn = new JButton("Apply to all images");
-		        apply_To_All_Btn.setMargin(new Insets(2, 2, 2, 2));
-		apply_To_All_Btn.addActionListener(e -> {
+        JButton apply_To_All_Btn = new JButton("Apply to all images");
+                apply_To_All_Btn.setMargin(new Insets(2, 2, 2, 2));
+        apply_To_All_Btn.addActionListener(e -> {
             ImagePlus imp = WindowManager.getCurrentImage();
             if (imp==null) return;
-		    int[] wList = WindowManager.getIDList();
-		    for (int i=0; i<wList.length; i++) {
-		        IJ.selectWindow(wList[i]);
-		        apply_Selected_LUT_Set(sets_Table, model);
-		    }
-		});
+            int[] wList = WindowManager.getIDList();
+            for (int i=0; i<wList.length; i++) {
+                IJ.selectWindow(wList[i]);
+                apply_Selected_LUT_Set(sets_Table, model);
+            }
+        });
 
         JButton add_Btn = new JButton("New");
         add_Btn.setMargin(new Insets(2, 10, 2, 10));
