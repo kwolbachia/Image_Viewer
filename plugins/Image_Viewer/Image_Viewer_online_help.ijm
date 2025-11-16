@@ -1,0 +1,1 @@
+run("URL...", "url=[https://imagej.net/plugins/image-viewer]");
