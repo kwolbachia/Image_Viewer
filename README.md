@@ -4,7 +4,7 @@ ImageJ / Fiji set of plugins and macros providing user friendly handling and vis
 
 # Installation
 - in Fiji, add the __Image Viewer__ [Update Site](https://imagej.net/update-sites/following). That's it.
-- For ImageJ, download this [github repository](https://github.com/kwolbachia/Image_Viewer/tree/main)       
+- For ImageJ, download this github repository       
 Then in your imageJ app folder : place the **Image Viewer** folder on the ``plugins`` folder and the **Image_Viewer_Toolset.ijm** file on the ``macros /toolsets/`` folder
 
 All commands and plugins are located in the ``Plugins > Image Viewer`` menu.       
