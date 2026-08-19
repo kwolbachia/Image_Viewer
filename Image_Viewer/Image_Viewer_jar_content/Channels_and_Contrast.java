@@ -1,8 +1,10 @@
 // Kevin Terretaz
 // kevinterretaz@gmail.com
 /*
-20260411
-- add invert LUT in fav button
+260817
+- add plugin to window Menu
+- add same composite mode to all opened images
+- add default palette if not created yet
 */ 
 import ij.*;
 import ij.process.*;
@@ -21,11 +23,12 @@ import java.awt.event.*;
 import java.awt.image.*;
 import java.util.*;
 import java.io.*;  
+
 // new Channels_and_Contrast().run()
 // null
 public class Channels_and_Contrast implements PlugIn {
     private static final String FRAME_TITLE = "Channels & Contrast";
-    final String save_Loc = IJ.getDirectory("luts")+"/LUT_Palette_Manager.csv";
+    final String SAVE_LOC = IJ.getDirectory("luts")+"/LUT_Palette_Manager.csv";
     final int LUT_COUNT = 5;    
     public static final String LOC_KEY = "Channels_and_Contrast.loc";
 
@@ -48,7 +51,15 @@ public class Channels_and_Contrast implements PlugIn {
     boolean PLUGIN_LOCKED = false;
     boolean[] LAST_ACTIVE_CHANNELS;
     String LAST_PROJECTION_TYPE;
-    String[] MORE_MENU = new String[] {"Same contrast to all opened images", "Split Channels", "Merge Channels...", "Arrange Channels...","Channels Tool...", "Brightness/Contrast..."};
+    String[] MORE_MENU = new String[] {
+        "Same contrast to all opened images",
+        "Same composite mode to all images",
+        "Split Channels",
+        "Merge Channels...",
+        "Arrange Channels...",
+        "Channels Tool...",
+        "Brightness/Contrast..."
+       };
     double SATURATED_PIXELS = Prefs.get("Channels_and_Contrast.saturated", 0.1);
     private boolean ERROR_STATE = false;
     private long LAST_ERROR_TIME = 0;
@@ -58,7 +69,7 @@ public class Channels_and_Contrast implements PlugIn {
     boolean debug = false;
 
     public void run(String arg) {
-        // If the plugin is already running, just bring it to front
+        // If the plugin is already running, bring it to front
         for (Frame open_Frame : JFrame.getFrames()) {
             if (FRAME_TITLE.equals(open_Frame.getTitle()) && open_Frame.isVisible()) {
                 open_Frame.toFront();
@@ -75,7 +86,7 @@ public class Channels_and_Contrast implements PlugIn {
                 }
             }
         });
-        // set a TIMER to listen for any relevant changes to update the UI
+        // TIMER to listen for any changes to update the UI
         // also check if the plugin is still opened to prevent error loops if the main ui broke
         TIMER = new javax.swing.Timer(50, new ActionListener() {
             public void actionPerformed(ActionEvent e) {boolean is_Plugin_Running = false;
@@ -117,20 +128,22 @@ public class Channels_and_Contrast implements PlugIn {
         check_Active_Image();
         Point loc = Prefs.getLocation(LOC_KEY);
         if (loc!=null) FRAME.setLocation(loc);
-        // TODO add a check if the saved loc fits the screen size
+        // TODO add a check if the saved loc fits the screen size?
         else GUI.centerOnImageJScreen(FRAME);
         FRAME.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         FRAME.addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
                 TIMER.stop();
-                Prefs.saveLocation(LOC_KEY, FRAME.getLocation());
+                Prefs.saveLocation(LOC_KEY, FRAME.getLocation());        
+                WindowManager.removeWindow(FRAME);
             }
         });
         FRAME.setIconImage(IJ.getInstance().getIconImage());
+        WindowManager.addWindow(FRAME);
         FRAME.setVisible(true);
     }
     
-    // check if a new image as been selected, if it's compatible with the plugin
+    // check if a new image as been selected & if compatible with the plugin
     // if not, put the FRAME in idle state.
     boolean check_Active_Image() {
         ImagePlus imp = WindowManager.getCurrentImage();
@@ -187,7 +200,7 @@ public class Channels_and_Contrast implements PlugIn {
         return true;
     }
 
-    // save current state for the something_Changed() method to compare
+    // save current state for the something_Changed() method
     void save_Current_State() {
         if (IMP.isComposite()) LAST_LUTS = ((CompositeImage)IMP).getLuts();
         else LAST_LUTS = ((ImagePlus)IMP).getLuts();
@@ -202,7 +215,7 @@ public class Channels_and_Contrast implements PlugIn {
         }
     }
 
-    // detect any relevant change in the current image to update the plugin
+    // detect any change in the current image to update the plugin
     boolean something_Changed() {
         boolean something_Changed = false;
         String whats_detected = "";
@@ -231,12 +244,12 @@ public class Channels_and_Contrast implements PlugIn {
                 something_Changed = true;
                 whats_detected += " active channels changed";
             }
-        // channel count changed
+        // channel count 
         if (IMP.getNChannels() != N_CHANNELS) {
             something_Changed = true;
             whats_detected += " channel count changed";
         }
-        // bit depth changed
+        // bit depth 
         if (IMP.getBitDepth() != BIT_DEPTH) {
             something_Changed = true;
             whats_detected += " bit depth changed";
@@ -421,7 +434,7 @@ public class Channels_and_Contrast implements PlugIn {
                     if (BIT_DEPTH == 32) {
                         double userInput = IJ.getNumber("Set min: ", (value / (double)SLIDER_SCALE));
                         if (userInput == IJ.CANCELED) return;
-                        new_Min = (int)(userInput * SLIDER_SCALE);  // Convert back to slider scale
+                        new_Min = (int)(userInput * SLIDER_SCALE);
                     } else {
                         new_Min = (int)IJ.getNumber("Set min: ", value);
                         if (new_Min == IJ.CANCELED) return;
@@ -472,7 +485,7 @@ public class Channels_and_Contrast implements PlugIn {
                     if (BIT_DEPTH == 32) {
                         double userInput = IJ.getNumber("Set max: ", (value / (double)SLIDER_SCALE));
                         if (userInput == IJ.CANCELED) return;
-                        new_Max = (int)(userInput * SLIDER_SCALE);  // Convert back to slider scale
+                        new_Max = (int)(userInput * SLIDER_SCALE);
                     } else {
                         new_Max = (int)IJ.getNumber("Set max: ", value);
                         if (new_Max == IJ.CANCELED) return;
@@ -581,9 +594,7 @@ public class Channels_and_Contrast implements PlugIn {
     void adjust_Contrast(int index) {
         if (UPDATING || IMP == null) return;
         // Ensure correct channel is selected if in composite (not IJ.COMPOSITE mode)
-        if (IMP.isComposite() 
-                && IMP.getCompositeMode() != IJ.COMPOSITE 
-                && IMP.getChannel() != index+1 ) 
+        if (IMP.isComposite() && IMP.getCompositeMode() != IJ.COMPOSITE && IMP.getChannel() != index+1 ) 
             IMP.setC(index+1);
         // Get min/max from channel sliders
         double min, max;
@@ -594,10 +605,9 @@ public class Channels_and_Contrast implements PlugIn {
             min = (double)MIN_SLIDERS[index].getValue();
             max = (double)MAX_SLIDERS[index].getValue();
         }
-        // Prevent min exceeding max
         if (min >= max) min = max;
         // If composite & not grayscale: update LUT for this channel, apply to image
-        // the grayscale mode is broken and shows current LUT instead with this method.
+        // (the grayscale mode is broken and shows current LUT instead with this method.)
         if (IMP.isComposite() && IMP.getCompositeMode() != IJ.GRAYSCALE){  
             LUTS[index] = new LUT(LUTS[index].getColorModel(), min, max);
             ((CompositeImage)IMP).setLuts(LUTS);
@@ -660,7 +670,7 @@ public class Channels_and_Contrast implements PlugIn {
         if(mode == "Invert") composite_Label = "Composite Invert";
         COMPOSITE_BUTTON = new JToggleButton(composite_Label){
             @Override
-            protected void paintComponent(Graphics g) {
+            protected void paintComponent(Graphics g) { // vertical 3 dots
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g;
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -816,101 +826,114 @@ public class Channels_and_Contrast implements PlugIn {
         show_LUT_Sets_Button.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                boolean no_Sets = false;
-                Object[][] sets = load_Sets_From_File(save_Loc);
-                if (sets == null || sets.length == 0) no_Sets = true;
+                Object[][] imported_sets = load_Sets_From_File(SAVE_LOC);
+                if (imported_sets == null) imported_sets = get_Default_LUT_Sets();
+                final Object[][] sets = imported_sets;
                 JPopupMenu popup = new JPopupMenu();
                 JPanel palettes_Panel = new JPanel();
-                if (!no_Sets) {
-                    palettes_Panel.setLayout(new BoxLayout(palettes_Panel, BoxLayout.Y_AXIS));
-                    for (int i = 0; i < sets.length; i++) {
-                        JPanel icons_Row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 3));
-                        icons_Row.setBackground(Color.darkGray);
-                        icons_Row.setToolTipText((String)sets[i][0]);
-                        java.util.List<String> lut_Names = new java.util.ArrayList<String>();
-                        final java.util.List<JLabel> icons_List = new java.util.ArrayList<JLabel>();
-                        for (int c = 1; c <= LUT_COUNT; c++) {
-                            Object icon_Obj = sets[i][c];
-                            String lut_Name = (icon_Obj instanceof ImageIcon) ? get_LUT_Name_At(icon_Obj) : "Grays";
-                            lut_Names.add(lut_Name);
-                            ImageIcon icon = (icon_Obj instanceof ImageIcon) ? (ImageIcon)icon_Obj : null;
-                            if (icon != null) {
-                                JLabel label = new JLabel(icon);
-                                icons_List.add(label);
-                                icons_Row.add(label);
+                palettes_Panel.setLayout(new BoxLayout(palettes_Panel, BoxLayout.Y_AXIS));
+                for (int i = 0; i < sets.length; i++) {
+                    JPanel icons_Row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 3));
+                    icons_Row.setBackground(Color.darkGray);
+                    icons_Row.setToolTipText((String)sets[i][0]);
+                    java.util.List<String> lut_Names = new java.util.ArrayList<String>();
+                    final java.util.List<JLabel> icons_List = new java.util.ArrayList<JLabel>();
+                    for (int c = 1; c <= LUT_COUNT; c++) {
+                        Object icon_Obj = sets[i][c];
+                        String lut_Name = (icon_Obj instanceof ImageIcon) ? get_LUT_Name_At(icon_Obj) : "Grays";
+                        lut_Names.add(lut_Name);
+                        ImageIcon icon = (icon_Obj instanceof ImageIcon) ? (ImageIcon)icon_Obj : null;
+                        if (icon != null) {
+                            JLabel label = new JLabel(icon);
+                            icons_List.add(label);
+                            icons_Row.add(label);
+                        }
+                    }
+                    // MouseListener
+                    final int row_Index = i;
+                    icons_Row.setTransferHandler(null);
+                    icons_Row.addMouseListener(new MouseAdapter() {
+                        int pressed_Index = -1;
+                        @Override
+                        public void mousePressed(MouseEvent event) {
+                            for (int k = 0; k < icons_List.size(); k++) {
+                                if (icons_List.get(k).getBounds().contains(event.getPoint())) {
+                                    pressed_Index = k;
+                                    break;
+                                }
                             }
                         }
-                        // MouseListener handles both drag-to-swap and apply on click
-                        final int row_Index = i;
-                        icons_Row.setTransferHandler(null); // disable any internal Swing drag support
-                        icons_Row.addMouseListener(new MouseAdapter() {
-                            int pressed_Index = -1;
-                            @Override
-                            public void mousePressed(MouseEvent event) {
-                                for (int k = 0; k < icons_List.size(); k++) {
-                                    if (icons_List.get(k).getBounds().contains(event.getPoint())) {
-                                        pressed_Index = k;
-                                        break;
+                        @Override
+                        public void mouseReleased(MouseEvent event) {
+                            if (pressed_Index == -1) return;
+                            for (int k = 0; k < icons_List.size(); k++) {
+                                if (icons_List.get(k).getBounds().contains(event.getPoint())) {
+                                    if (pressed_Index != k) {
+                                        // Drag & swap
+                                        Icon temp_Icon = icons_List.get(pressed_Index).getIcon();
+                                        icons_List.get(pressed_Index).setIcon(icons_List.get(k).getIcon());
+                                        icons_List.get(k).setIcon(temp_Icon);
+                                        String temp_Name = lut_Names.get(pressed_Index);
+                                        lut_Names.set(pressed_Index, lut_Names.get(k));
+                                        lut_Names.set(k, temp_Name);
+                                        Object temp_Obj = sets[row_Index][pressed_Index + 1];
+                                        sets[row_Index][pressed_Index + 1] = sets[row_Index][k + 1];
+                                        sets[row_Index][k + 1] = temp_Obj;
+                                        icons_Row.repaint();
+                                        export_Lut_Sets_From_Sets_Array(sets, IJ.getDirectory("luts")+"/LUT_Palette_Manager.csv");
                                     }
+                                    // apply LUTs
+                                    ImagePlus imp = WindowManager.getCurrentImage();
+                                    if (imp == null) return;
+                                    int N_CHANNELS = imp.getNChannels();
+                                    for (int ch = 0; ch < N_CHANNELS; ch++) {
+                                        String lut_Name = (ch < lut_Names.size()) ? lut_Names.get(ch) : "Grays";
+                                        apply_LUT(imp, lut_Name, ch + 1);
+                                    }
+                                    if (imp.isComposite()) ((CompositeImage)IMP).setDisplayMode(IJ.COMPOSITE);
+                                    imp.updateAndDraw();
+                                    break;
                                 }
                             }
-                            @Override
-                            public void mouseReleased(MouseEvent event) {
-                                if (pressed_Index == -1) return;
-                                for (int k = 0; k < icons_List.size(); k++) {
-                                    if (icons_List.get(k).getBounds().contains(event.getPoint())) {
-                                        if (pressed_Index != k) {
-                                            // Drag & swap
-                                            Icon temp_Icon = icons_List.get(pressed_Index).getIcon();
-                                            icons_List.get(pressed_Index).setIcon(icons_List.get(k).getIcon());
-                                            icons_List.get(k).setIcon(temp_Icon);
-                                            String temp_Name = lut_Names.get(pressed_Index);
-                                            lut_Names.set(pressed_Index, lut_Names.get(k));
-                                            lut_Names.set(k, temp_Name);
-                                            Object temp_Obj = sets[row_Index][pressed_Index + 1];
-                                            sets[row_Index][pressed_Index + 1] = sets[row_Index][k + 1];
-                                            sets[row_Index][k + 1] = temp_Obj;
-                                            icons_Row.repaint();
-                                            export_Lut_Sets_From_Sets_Array(sets, IJ.getDirectory("luts")+"/LUT_Palette_Manager.csv");
-                                        }
-                                        // Click: apply LUTs, using the CURRENT lut_Names!
-                                        ImagePlus imp = WindowManager.getCurrentImage();
-                                        if (imp == null) return;
-                                        int N_CHANNELS = imp.getNChannels();
-                                        for (int ch = 0; ch < N_CHANNELS; ch++) {
-                                            String lut_Name = (ch < lut_Names.size()) ? lut_Names.get(ch) : "Grays";
-                                            apply_LUT(imp, lut_Name, ch + 1);
-                                        }
-                                        if (imp.isComposite()) ((CompositeImage)IMP).setDisplayMode(IJ.COMPOSITE);
-                                        imp.updateAndDraw();
-                                        break;
-                                    }
-                                }
-                                pressed_Index = -1;
-                            }
+                            pressed_Index = -1;
+                        }
 
-                            @Override
-                            public void mouseEntered(MouseEvent evt) {
-                                icons_Row.setBackground(new Color(220, 240, 255));
-                            }
-                            @Override
-                            public void mouseExited(MouseEvent evt) {
-                                icons_Row.setBackground(Color.darkGray);
-                            }
-                        });
-                        palettes_Panel.add(icons_Row);
-                    }
+                        @Override
+                        public void mouseEntered(MouseEvent evt) {
+                            icons_Row.setBackground(new Color(220, 240, 255));
+                        }
+                        @Override
+                        public void mouseExited(MouseEvent evt) {
+                            icons_Row.setBackground(Color.darkGray);
+                        }
+                    });
+                    palettes_Panel.add(icons_Row);
                 }
                 JMenuItem open_Mana = new JMenuItem("Open LUTs manager");
                 open_Mana.addActionListener(event -> IJ.run("LUTs Manager"));
                 open_Mana.setEnabled(true);
-                if (!no_Sets) popup.add(palettes_Panel);
+                popup.add(palettes_Panel);
                 popup.add(open_Mana);
                 popup.show(show_LUT_Sets_Button, 10, show_LUT_Sets_Button.getHeight());
             }
         });
         return show_LUT_Sets_Button;
     }
+    
+    public Object[][] get_Default_LUT_Sets() {
+        Object[][] sets = new Object[][] {
+            make_LUT_Set("CMY", new String[]{"Cyan","Magenta","Yellow","Grays",null}),
+        };
+        return sets;
+    }
+
+    public Object[] make_LUT_Set(String name, String[] lut_Names) {
+        Object[] set = new Object[LUT_COUNT+1];
+        set[0] = name;
+        for (int i=1; i<=LUT_COUNT; i++) set[i] = (i<=lut_Names.length && lut_Names[i-1]!=null) ? get_LUT_Set_Icon(lut_Names[i-1]) : null;
+        return set;
+    }
+
     public JButton get_Fav_LUTs_Button() { 
         JButton fav_LUTs_Button = new JButton(make_LUT_Palette_Icon(40, 16));
         fav_LUTs_Button.setToolTipText("Favorite LUTs");
@@ -1031,7 +1054,6 @@ public class Channels_and_Contrast implements PlugIn {
         }
         update_UI();
     }
-
     
     public Color get_Channel_Color(int i, LUT[] luts) {
         if (luts==null || LAST_MODE==IJ.GRAYSCALE)

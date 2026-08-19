@@ -6,6 +6,10 @@ kevinterretaz@gmail.com
 260322 add cheat sheet when double click the tool 
 260412 add fly mode when not stack
        add invert LUT command in fav luts panel
+260817 fix non-tif preview opener error
+I heavilly used OpenAI GPT thanks to the github playground access
+So I guess I have to thank the entire world of programmers that published their code since the begining of java
+I would have never be able to build these plugins without it.
 
 unlicense :
 This is free and unencumbered software released into the public domain. Anyone is free to copy, modify, publish, use, compile, sell, or
@@ -28,7 +32,7 @@ import java.awt.event.KeyEvent;
 import java.awt.*;
 import java.io.File;
 
- // Toolbar.addPlugInTool(new Multi_Tool())
+// Toolbar.addPlugInTool(new Multi_Tool())
 public class Multi_Tool extends PlugInTool {
     Integer SCREEN_START_X, SCREEN_START_Y, WINDOW_START_X, WINDOW_START_Y, FLAGS, PIXEL_X0, PIXEL_Y0, PIXEL_X, PIXEL_Y;
     Integer BITDEPTH, CHANNEL, NSLICES, NFRAMES; 
@@ -72,7 +76,7 @@ public class Multi_Tool extends PlugInTool {
         Roi roi = imp.getRoi();
         int handle = roi!=null?roi.isHandle((int)e.getX(), (int)e.getY()):-1;
         if (handle >= 0) CANVAS.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        if (imp.getTitle().matches(".*Preview Opener.*")) set_Opener_Label(imp);
+        if (imp.getTitle().matches(".*Preview Opener.*") && imp.getTitle().endsWith(".tif")) set_Opener_Label(imp);
     }
 
     @Override
@@ -102,7 +106,7 @@ public class Multi_Tool extends PlugInTool {
             REMOVE_ROI = true;
         }
         // Preview Opener
-        if ((e.getClickCount() == 2 || MIDDLE) && imp.getTitle().matches(".*Preview Opener.*")) {
+        if ((e.getClickCount() == 2 || MIDDLE) && imp.getTitle().matches(".*Preview Opener.*") && imp.getTitle().endsWith(".tif")) {
             open_From_Preview_Opener(imp);
         }
         // composite switch
