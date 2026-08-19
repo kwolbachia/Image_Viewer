@@ -1,23 +1,23 @@
+// 1.8
+
 var viewer_Menu = newMenu("Image Viewer Menu Tool",
 	newArray( 
 		"Channels and Contrast",
-		"LUTs Manager",
 		"Multi Tool",
+		"LUTs Manager",
+		"Create Preview Opener",
 		"-",
+		"Apply first LUT Palette",
 		"Split View (multi-channel montage)",
 		"Auto scale bar",
-		"Create Preview Opener",
-		"Image Viewer options",
 		"-",
 		"Auto contrast all images",
-		"Auto contrast all channels",
-		"Auto contrast active channel",
 		"Reset min max all images",
-		"Reset min max all channels",
-		"Reset min max active channel",
 		"Same contrast to all opened images",
-		"-",
+		"Same composite mode to all images",
 		"Save all opened images as",
+		"-",
+		"Image Viewer options",
 		"Image Viewer online help"
 	)
 );

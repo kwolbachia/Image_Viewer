@@ -1,6 +1,6 @@
 /*
 Kevin Terretaz - kevinterretaz@gmail.com
-no AI for this
+no AI there
 260323 bug fix with 24bit
 unlicense :
 This is free and unencumbered software released into the public domain. Anyone is free to copy, modify, publish, use, compile, sell, or
@@ -19,10 +19,12 @@ propagate_Contrasts_All_Images();
 function propagate_Contrasts_All_Images(){
 	if (nImages()==0) exit();
 	if (bitDepth()==24) exit();
+	id = getImageID();
 	Stack.getPosition(channel, slice, frame);
 	getDimensions(width, height, channels, slices, frames);
 	mins = newArray(channels);
 	maxs = newArray(channels);
+	// get min max
 	if (channels > 1){
 		for(i=0; i<channels; i++){
 			Stack.setChannel(i+1);
@@ -33,18 +35,22 @@ function propagate_Contrasts_All_Images(){
 	}
 	else getMinAndMax(mins[0], maxs[0]);
 	
+	// apply to all
 	for (i = 0; i < nImages; i++) {
 		selectImage(i+1);
 		if (bitDepth() != 24) {
 			getDimensions(width, height, channels, slices, frames);
 			if (channels>1){
+				Stack.getPosition(channel, slice, frame);
 				for(k=0; k<channels; k++){
 					Stack.setChannel(k+1);
 					setMinAndMax(mins[k], maxs[k]);
 				}
+				Stack.setChannel(channel);
 				updateDisplay();
 			}
 			else setMinAndMax(mins[0], maxs[0]);
 		}
 	}
+	selectImage(id);
 }
